@@ -112,7 +112,9 @@ def load_delta_data(end_dt):
     return delta_data
 
 def load_trade_data(end_dt):
-    trade_data = load_joblib(f"tradedata_{end_dt}.joblib")
+    trade_data_0 = load_joblib(f"tradedata_123_{end_dt}.joblib")
+    trade_data_1 = load_joblib(f"tradedata_4567891011_{end_dt}.joblib")
+    trade_data = {**trade_data_0, **trade_data_1}
     return trade_data
 
 with st.spinner("Querying Data, Will take about 2 minutes, Please Wait..."):
@@ -121,7 +123,8 @@ with st.spinner("Querying Data, Will take about 2 minutes, Please Wait..."):
     fut_istu_order = {'01':0,'02':1,'03':2,'04':3,'05':4,'06':5,'07':6,'08':7,'09':8,'10':9,'11':10,'13':11,'00':12}
     ktb_info, ktb_otr = load_ktb_info()
     auction_stat_data, auction_otrofr_spread_data, auction_borrowing_data, auction_butterfly_data, auction_option_data = load_auction_data()
-    date_list = get_delta_data_date_list()
+    delta_date_list = get_delta_data_date_list()
+    trade_date_list = get_trade_data_date_list()
 
 with st.container():
     tab1, tab2, tab3 = st.tabs(['Delta S/D', 'KTB S/D', 'KTB Auction'])
@@ -133,8 +136,8 @@ with st.container():
         with st.container():
             col1, col2, col3 = st.columns(3)
             with col1:
-                file_date = st.selectbox('Choose a Date', date_list)
-                delta_data = load_delta_data(file_date)
+                delta_file_date = st.selectbox('Choose a Date', delta_date_list)
+                delta_data = load_delta_data(delta_file_date)
             with col2:
                 days_covered = st.selectbox('Days Covered', [1,5])
                 
@@ -149,16 +152,19 @@ with st.container():
 
             with col1_d:
                 st.markdown('Delta Demand')
-                st.dataframe(delta_demand.set_index('Tenor').style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
+                delta_demand.index.name = 'Tenor'
+                st.dataframe(delta_demand.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
                 
             with col2_d:
                 col2_d_1, col2_d_2 = st.columns(2)
                 with col2_d_1:
                     st.markdown('Delta Supply')
-                    st.dataframe(delta_supply.set_index('Tenor').style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
+                    delta_supply.index.name = 'Tenor'
+                    st.dataframe(delta_supply.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
                 with col2_d_2:
                     st.markdown('Delta Borrowing')
-                    st.dataframe(delta_borrow.set_index('Tenor').style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
+                    delta_borrow.index.name = 'Tenor'
+                    st.dataframe(delta_borrow.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
 
         with st.container():
             st.markdown('Futures Traded')
@@ -168,3 +174,16 @@ with st.container():
                 st.dataframe(delta_future.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), use_container_width=True)
             with col2_f:
                 st.dataframe(volume_future.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), use_container_width=True)
+
+    with tab2:
+        with st.container():
+            col1, col2 = st.columns(2)
+            with col2:
+                end_date = st.selectbox('End Date', trade_date_list)
+                trade_data = load_trade_data(end_date)
+            with col1:
+                start_date = datetime.strftime(st.date_input('End Date'), '%Y-%m-%d')
+                if start_date>end_date:
+                    st.error('Start Date must be earlier than End Date')
+                else:
+               
