@@ -79,7 +79,7 @@ def get_delta_data_date_list():
     data_folder = file_dir+"\\HSBCMonitor"
     files = get_files_by_extension(data_folder, 'joblib')
     delta_data_files = [file for file in files if 'deltadata_' in file.name]
-    date_list = [file.name.split('_')[1].split('.')[0] for file in delta_data_files]
+    date_list = [file.name.split('_')[-1].split('.')[0] for file in delta_data_files]
     return date_list
 
 @st.cache_data(show_spinner=False)
@@ -87,7 +87,7 @@ def get_trade_data_date_list():
     data_folder = file_dir+"\\HSBCMonitor"
     files = get_files_by_extension(data_folder, 'joblib')
     trade_data_files = [file for file in files if 'tradedata_' in file.name]
-    date_list = [file.name.split('_')[1].split('.')[0] for file in trade_data_files]
+    date_list = [file.name.split('_')[-1].split('.')[0] for file in trade_data_files]
     return date_list
 
 @st.cache_data(show_spinner=False)
@@ -119,6 +119,7 @@ with st.spinner("Querying Data, Will take about 2 minutes, Please Wait..."):
     tenor_order = {'3M':0, '6M':1, '9M':2, '1Y':3, '18M':4, '2Y':5, '3Y':6, '4Y':7, '5Y':8, '7Y':9, '10Y':10, '15Y':11, '20Y':12, '30Y':13, '50Y':14}
     istu_order = ['01','02','03','04','05','06','07','08','09','10','11']
     fut_istu_order = {'01':0,'02':1,'03':2,'04':3,'05':4,'06':5,'07':6,'08':7,'09':8,'10':9,'11':10,'13':11,'00':12}
+    ktb_istu_match_dict = {'01':'Foreigns', '02':'Securities', '03':'Insurances', '04':'Asset Mgrs.', '05':'Banks','07':'Other Fins.', '08':'Pensions', '10':'Other Corps.', '11':'Individuals'}
     ktb_info, ktb_otr = load_ktb_info()
     auction_stat_data, auction_otrofr_spread_data, auction_borrowing_data, auction_butterfly_data, auction_option_data = load_auction_data()
     delta_date_list = get_delta_data_date_list()
@@ -134,15 +135,23 @@ with st.container():
         with st.container():
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                delta_file_date = st.selectbox('Choose a Date', delta_date_list)
+                delta_file_date = st.selectbox('Date', delta_date_list)
                 delta_data = load_delta_data(delta_file_date)
+            with col4:
+                fx = st.number_input('USDKRW', value=1350.0, step=0.1, format='%f')
+            with col3:
+                currency = st.selectbox('Display Currency', ['KRW', 'USD'])
+                if currency == 'KRW':
+                    fx_multiplier = 1
+                else:
+                    fx_multiplier = 1/(fx/1000)
             with col2:
                 days_covered = st.selectbox('Days Covered', [1,5])
                 
-                delta_demand = delta_data[days_covered]['delta_demand_summary']
-                delta_supply = delta_data[days_covered]['delta_supply_summary']
-                delta_borrow = delta_data[days_covered]['delta_borrow_summary']
-                delta_future = delta_data[days_covered]['delta_future_summary']
+                delta_demand = delta_data[days_covered]['delta_demand_summary']*fx_multiplier
+                delta_supply = delta_data[days_covered]['delta_supply_summary']*fx_multiplier
+                delta_borrow = delta_data[days_covered]['delta_borrow_summary']*fx_multiplier
+                delta_future = delta_data[days_covered]['delta_future_summary']*fx_multiplier
                 volume_future = delta_data[days_covered]['volume_future_summary']
                 
         with st.container():
@@ -175,13 +184,108 @@ with st.container():
 
     with tab2:
         with st.container():
-            col1, col2 = st.columns(2)
-            with col2:
-                end_date = st.selectbox('End Date', trade_date_list)
-                trade_data = load_trade_data(end_date)
+            col1, col2, col3 = st.columns(3)
             with col1:
-                start_date = datetime.strftime(st.date_input('Start Date'), '%Y-%m-%d')
-                if start_date>end_date:
-                    st.error('Start Date must be earlier than End Date')
+                col1_1, col1_2 = st.columns(2)
+                with col1_2:
+                    end_date = datetime.strftime(st.date_input('End Date', datetime.strptime(max(trade_date_list), '%Y-%m-%d'), max_value=datetime.strptime(max(trade_date_list), '%Y-%m-%d')), '%Y-%m-%d')
+                    #end_date = st.selectbox('End Date', trade_date_list)
+                    trade_data = load_trade_data(end_date)
+                with col1_1:
+                    start_date = datetime.strftime(st.date_input('Start Date'), '%Y-%m-%d')
+                    if start_date>end_date:
+                        st.error('Start Date must be earlier than End Date')
+            with col2:
+                col2_1, col2_2 = st.columns(2)
+                with col2_2:
+                    fx = st.number_input('USDKRW ', value=1350.0, step=0.1, format='%f')
+                with col2_1:
+                    currency = st.selectbox('Display Currency ', ['KRW', 'USD'])
+                    if currency == 'KRW':
+                        fx_multiplier = 1
+                    else:
+                        fx_multiplier = 1/(fx/1000)
+            with col3:
+                col3_1, col3_2 = st.columns(2)
+                with col3_1:
+                    ktb_type = st.multiselect('Select KTB Type', ['국고', '국고이자', '국고원금', '물가'], default =['국고'], max_selections=4)
+                with col3_2:
+                    ktb_istu_match_dict_reverse = dict(zip(ktb_istu_match_dict.values(), ktb_istu_match_dict.keys()))
+                    institution = st.selectbox('Institution', list(ktb_istu_match_dict_reverse.keys()))
+                    istu_code = ktb_istu_match_dict_reverse[institution]
 
+            ktb_info_ = ktb_info[(ktb_info['RDMP_DATE'] >= start_date)]
+            ktb_codes = []
+            for c, n in zip(ktb_info_.STND_ISCD, ktb_info_.KOR_ISNM):
+                for t in ktb_type:
+                    if t == '국고':
+                        if '국고' in n and '국고이자' not in n and '국고원금' not in n:
+                            ktb_codes.append(c)
+                    else:
+                        if t in n:
+                            ktb_codes.append(c)
+            ktb_info_ = ktb_info_[ktb_info_.STND_ISCD.isin(ktb_codes)]   
+            ktb_info_ = ktb_info_[['STND_ISCD', 'KOR_ISNM','SRFC_INT', 'RDMP_DATE']].sort_values(by='RDMP_DATE').set_index('STND_ISCD').reset_index()
+            ktb_info_.columns = ['Code', 'Name', 'Coupon', 'Maturity Date']
+            
+            #proecess data
+            trade_data_ = trade_data['01']
+            trade_data_['Direction'] = trade_data_['Direction'].replace({1:1, 2:-1})
+            trade_data_['Amount'] = trade_data_['Volume']*trade_data_['Direction']
+            trade_data_['Delta'] = -1*trade_data_['Amount']*trade_data_['Price']*trade_data_['Duration']*fx_multiplier/1000
+            trade_data_d = trade_data_[(trade_data_.Date>=start_date)&(trade_data_.Date<=end_date)&(trade_data_.Code.isin(ktb_codes))].set_index('Date').reset_index()
+
+            trade_data_amount = trade_data_d.pivot_table(index='Code', columns='Date', values='Amount').fillna(0)
+            trade_data_amount.columns.name = None
+            trade_data_amount.index.name = None
+            trade_data_delta = trade_data_d.pivot_table(index='Code', columns='Date', values='Delta').fillna(0)
+            trade_data_delta.columns.name = None
+            trade_data_delta.index.name = None
+            
+            ktb_info_d = ktb_info_[ktb_info_['Code'].isin(trade_data_amount.index)].set_index('Code')
+            trade_data_amount = pd.merge(ktb_info_d.reset_index()[['Code', 'Name']].set_index('Code'), trade_data_amount,  left_index=True, right_index=True, how='left')
+            trade_data_delta = pd.merge(ktb_info_d.reset_index()[['Code', 'Name']].set_index('Code'), trade_data_delta,  left_index=True, right_index=True, how='left')
+        
+        with st.container():
+            col1, col2 = st.columns([1, 2])  # 1:2 ratio for width distribution
+            
+            with col1:
+                st.markdown('KTB List')
+                st.dataframe(
+                    ktb_info_d.style.format({
+                        'SRFC_INT': '{:.3f}',
+                        'RDMP_DATE': '{:%Y-%m-%d}'
+                    }), 
+                    use_container_width=True
+                )
+            
+            with col2:
+                st.markdown('Trade Data Amount')
+                st.dataframe(
+                    trade_data_amount.style
+                    .applymap(style_negative, props='color:red;')
+                    .format(precision=0, thousands=","), 
+                    use_container_width=True
+                )
                
+        with st.container():
+            col1, col2 = st.columns([1, 2])  # 1:2 ratio for width distribution
+            
+            with col1:
+                st.markdown('KTB List')
+                st.dataframe(
+                    ktb_info_d.style.format({
+                        'SRFC_INT': '{:.3f}',
+                        'RDMP_DATE': '{:%Y-%m-%d}'
+                    }), 
+                    use_container_width=True
+                )
+            
+            with col2:
+                st.markdown('Trade Data Delta')
+                st.dataframe(
+                    trade_data_delta.style
+                    .applymap(style_negative, props='color:red;')
+                    .format(precision=0, thousands=","), 
+                    use_container_width=True
+                )
