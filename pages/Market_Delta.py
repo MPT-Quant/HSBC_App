@@ -53,7 +53,6 @@ def get_files_by_extension(folder_path, extension):
 def save_joblib(file_name, data):
     data_folder = file_dir+"\\HSBCMonitor"
     os.makedirs(data_folder, exist_ok=True)
-    """Helper function to save data using joblib with exception handling."""
     try:
         file_path = os.path.join(data_folder, file_name)
         dump(data, file_path, compress=3)  # Compression level 3 (balances speed & size)
@@ -64,7 +63,6 @@ def save_joblib(file_name, data):
 def load_joblib(file_name):
     data_folder = file_dir+"\\HSBCMonitor"
     os.makedirs(data_folder, exist_ok=True)
-    """Helper function to load joblib files with error handling."""
     file_path = os.path.join(data_folder, file_name)
     try:
         if os.path.exists(file_path):
@@ -94,11 +92,11 @@ def get_trade_data_date_list():
 
 @st.cache_data(show_spinner=False)
 def load_auction_data():
-    auction_stat_data = load_joblib(auction_stat_data.joblib)
-    auction_otrofr_spread_data = load_joblib(auction_otrofr_spread_data.joblib)
-    auction_borrowing_data = load_joblib(auction_borrowing_data.joblib)
-    auction_butterfly_data = load_joblib(auction_butterfly_data.joblib)
-    auction_option_data = load_joblib(auction_option_data.joblib)
+    auction_stat_data = load_joblib('auction_stat_data.joblib')
+    auction_otrofr_spread_data = load_joblib('auction_otrofr_spread_data.joblib')
+    auction_borrowing_data = load_joblib('auction_borrowing_data.joblib')
+    auction_butterfly_data = load_joblib('auction_butterfly_data.joblib')
+    auction_option_data = load_joblib('auction_option_data.joblib')
     return auction_stat_data, auction_otrofr_spread_data, auction_borrowing_data, auction_butterfly_data, auction_option_data
 
 @st.cache_data(show_spinner=False)
@@ -134,7 +132,7 @@ with st.container():
 
     with tab1:
         with st.container():
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 delta_file_date = st.selectbox('Choose a Date', delta_date_list)
                 delta_data = load_delta_data(delta_file_date)
@@ -182,8 +180,8 @@ with st.container():
                 end_date = st.selectbox('End Date', trade_date_list)
                 trade_data = load_trade_data(end_date)
             with col1:
-                start_date = datetime.strftime(st.date_input('End Date'), '%Y-%m-%d')
+                start_date = datetime.strftime(st.date_input('Start Date'), '%Y-%m-%d')
                 if start_date>end_date:
                     st.error('Start Date must be earlier than End Date')
-                else:
+
                
