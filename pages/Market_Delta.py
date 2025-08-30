@@ -115,6 +115,12 @@ def load_trade_data(end_dt):
     trade_data = {**trade_data_0, **trade_data_1}
     return trade_data
 
+
+###
+def load_volume_profilate_data():
+    volume_profile_data = load_joblib("volume_profile_data.joblib")
+    return volume_profile_data
+
 with st.spinner("Querying Data, Will take about 2 minutes, Please Wait..."):
     tenor_order = {'3M':0, '6M':1, '9M':2, '1Y':3, '18M':4, '2Y':5, '3Y':6, '4Y':7, '5Y':8, '7Y':9, '10Y':10, '15Y':11, '20Y':12, '30Y':13, '50Y':14}
     istu_order = ['01','02','03','04','05','06','07','08','09','10','11']
@@ -124,9 +130,11 @@ with st.spinner("Querying Data, Will take about 2 minutes, Please Wait..."):
     auction_stat_data, auction_otrofr_spread_data, auction_borrowing_data, auction_butterfly_data, auction_option_data = load_auction_data()
     delta_date_list = get_delta_data_date_list()
     trade_date_list = get_trade_data_date_list()
+    ###
+    potential_supply_long_dict, potential_supply_short_dict, delta_traded_dict, potential_supply_tenor_long_dict, potential_supply_tenor_short_dict, delta_traded_tenor_dict = load_volume_profilate_data()
 
 with st.container():
-    tab1, tab2, tab3 = st.tabs(['Delta S/D', 'KTB S/D', 'KTB Auction'])
+    tab1, tab2, tab3, tab4 = st.tabs(['Delta S/D', 'KTB S/D', 'KTB Auction', 'Volume Profile'])
 
     with open(css_dir) as f:
         st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html = True)
@@ -289,3 +297,39 @@ with st.container():
                     .format(precision=0, thousands=","), 
                     use_container_width=True
                 )
+
+    with tab3:
+        st.markdown('KTB Auction Data')
+
+
+    with tab4:
+        with st.container():
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                volume_profile_type = st.selectbox('Volume Profile Type', ['Curve', 'Tenor'])
+            with col2:
+                volume_profile_direction = st.selectbox('Volume Profile Direction', ['Long', 'Short', 'Volume'])
+            with col3:
+                if volume_profile_type == 'Curve':
+                    volume_profile_strat = st.selectbox('Volume Profile Direction', ['Long', 'Short'])
+                else:
+                    volume_profile_strat = st.selectbox('Volume Profile Direction', ['Long', 'Short'])
+            with col5:
+                fx = st.number_input('USDKRW', value=1350.0, step=0.1, format='%f')
+            with col4: 
+                currency = st.selectbox('Display Currency', ['KRW', 'USD'])
+                if currency == 'KRW':
+                    fx_multiplier = 1
+                else:
+                    fx_multiplier = 1/(fx/1000)
+
+            if volume_profile_type == 'Curve' and volume_profile_direction == 'Long':
+                volume_profile_data = potential_supply_long_dict
+            elif volume_profile_type == 'Curve' and volume_profile_direction == 'Short':
+                volume_profile_data = potential_supply_short_dict
+            elif volume_profile_type == 'Tenor' and volume_profile_direction == 'Long':
+                volume_profile_data = potential_supply_tenor_long_dict
+            potential_supply_long_dict, potential_supply_short_dict, delta_traded_dict, potential_supply_tenor_long_dict, potential_supply_tenor_short_dict, delta_traded_tenor_dict = load_volume_profilate_data()
+
+
+
