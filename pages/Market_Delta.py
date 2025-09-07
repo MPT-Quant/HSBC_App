@@ -308,28 +308,107 @@ with st.container():
             with col1:
                 volume_profile_type = st.selectbox('Volume Profile Type', ['Curve', 'Tenor'])
             with col2:
-                volume_profile_direction = st.selectbox('Volume Profile Direction', ['Long', 'Short', 'Volume'])
+                volume_profile_direction = st.selectbox('Volume Profile Direction/Volume', ['Direction', 'Volume'])
+                if volume_profile_direction == 'Volume':
+                    volume_lookback = st.number_input('Looback', value=20, step=1)
+                elif volume_profile_direction == 'Direction':
+                    dt = potential_supply_tenor_long_dict['3Y'].index[-1].split('-')
+                    volume_profile_asof = datetime.strftime(st.date_input('As Of', date(int(dt[0]),int(dt[1]),int(dt[2]))), '%Y-%m-%d')
+                    
             with col3:
+                if volume_profile_type == 'Curve' and volume_profile_direction == 'Direction':
+                    volume_profile_data_long = potential_supply_long_dict
+                    volume_profile_data_short = potential_supply_short_dict
+                    volume_profile_strat_list = list(volume_profile_data_long.keys())
+                elif volume_profile_type == 'Curve' and volume_profile_direction == 'Volume':
+                    volume_profile_data_volume = delta_traded_dict
+                    volume_profile_strat_list = list(volume_profile_data_volume.keys())
+                elif volume_profile_type == 'Tenor' and volume_profile_direction == 'Direction':
+                    volume_profile_data_long = potential_supply_tenor_long_dict
+                    volume_profile_data_short = potential_supply_tenor_short_dict
+                    volume_profile_strat_list = list(volume_profile_data_long.keys())
+                elif volume_profile_type == 'Tenor' and volume_profile_direction == 'Volume':
+                    volume_profile_data_volume = delta_traded_tenor_dict
+                    volume_profile_strat_list = list(volume_profile_data_volume.keys())
+                
                 if volume_profile_type == 'Curve':
-                    volume_profile_strat = st.selectbox('Volume Profile Direction', ['Long', 'Short'])
+                    volume_profile_strat = st.selectbox('Volume Profile Strategy', volume_profile_strat_list)
                 else:
-                    volume_profile_strat = st.selectbox('Volume Profile Direction', ['Long', 'Short'])
+                    volume_profile_strat = st.selectbox('Volume Profile Tenor', volume_profile_strat_list)
             with col5:
-                fx = st.number_input('USDKRW', value=1350.0, step=0.1, format='%f')
+                fx = st.number_input('USDKRW  ', value=1350.0, step=0.1, format='%f')
             with col4: 
-                currency = st.selectbox('Display Currency', ['KRW', 'USD'])
+                currency = st.selectbox('Display Currency  ', ['KRW', 'USD'])
                 if currency == 'KRW':
                     fx_multiplier = 1
                 else:
                     fx_multiplier = 1/(fx/1000)
 
-            if volume_profile_type == 'Curve' and volume_profile_direction == 'Long':
-                volume_profile_data = potential_supply_long_dict
-            elif volume_profile_type == 'Curve' and volume_profile_direction == 'Short':
-                volume_profile_data = potential_supply_short_dict
-            elif volume_profile_type == 'Tenor' and volume_profile_direction == 'Long':
-                volume_profile_data = potential_supply_tenor_long_dict
-            potential_supply_long_dict, potential_supply_short_dict, delta_traded_dict, potential_supply_tenor_long_dict, potential_supply_tenor_short_dict, delta_traded_tenor_dict = load_volume_profilate_data()
-
-
-
+            if volume_profile_direction == 'Volume':
+                volume_profile_data_volume_selected = volume_profile_data_volume[volume_profile_strat]*fx_multiplier
+                volume_profile_data_volume_selected = volume_profile_data_volume_selected[(volume_profile_data_volume_selected['Long Volume']!=0)&(volume_profile_data_volume_selected['Short Volume']!=0)]
+                volume_profile_data_volume_selected = volume_profile_data_volume_selected.rolling(window=volume_lookback).mean().dropna()
+            else:
+                volume_profile_data_long_selected = volume_profile_data_long[volume_profile_strat]*fx_multiplier
+                volume_profile_data_short_selected = volume_profile_data_short[volume_profile_strat]*fx_multiplier  
+        
+        st.divider()
+        with st.container():
+            if volume_profile_direction == 'Volume':
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.markdown(f'Volume Profile - Delta Traded')
+                    volume_profile_data_volume_selected['Net'] = volume_profile_data_volume_selected['Long Volume'] - volume_profile_data_volume_selected['Short Volume']
+                    st.dataframe(volume_profile_data_volume_selected.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
+                
+                with col2:
+                    volume_profile_data_volume_selected_chart = volume_profile_data_volume_selected.copy()
+                    volume_profile_data_volume_selected_chart.index.name = 'Date'
+                    volume_profile_data_volume_selected_chart = volume_profile_data_volume_selected_chart.reset_index()
+                    volume_profile_data_volume_selected_chart['Date'] = pd.to_datetime(volume_profile_data_volume_selected_chart['Date'])
+                    fig_v = make_subplots(specs=[[{"secondary_y":True}]])
+                    fig_v.add_trace(go.Scatter(x=volume_profile_data_volume_selected_chart['Date'], y=volume_profile_data_volume_selected_chart['Long Volume'], name='Long Volume', mode='lines', hovertemplate='<br>Date: %{x:|%B %d, %Y}<br>'+ ': %{y:.3f}'), secondary_y=True)
+                    fig_v.add_trace(go.Scatter(x=volume_profile_data_volume_selected_chart['Date'], y=volume_profile_data_volume_selected_chart['Short Volume'], name='Short Volume', mode='lines', hovertemplate='<br>Date: %{x:|%B %d, %Y}<br>'+ ': %{y:.3f}'), secondary_y=True)
+                    fig_v.add_trace(go.Bar(x=volume_profile_data_volume_selected_chart['Date'], y=volume_profile_data_volume_selected_chart['Net'], name='Net', hovertemplate='<br>Date: %{x:|%B %d, %Y}<br> Net : %{y:.3f}'), secondary_y=False)            
+                    fig_v.update_xaxes(dtick="M3", tickformat="%Y.%m",
+                                rangeselector = dict(
+                                buttons=list([
+                                dict(count=1, label="1m", step="month", stepmode="backward"),
+                                dict(count=6, label="6m", step="month", stepmode="backward"),
+                                dict(count=1, label="YTD", step="year", stepmode="todate"),
+                                dict(count=1, label="1y", step="year", stepmode="backward"),
+                                dict(step="all")])))
+                    st.markdown('Volume Profile - Delta Traded {} Rolling Average'.format(volume_lookback))
+                    st.plotly_chart(fig_v, use_container_width=True)
+            else:
+                #volume_profile_data_long_selected
+                #volume_profile_data_short_selected
+                volume_profile_data_selected_dt = pd.DataFrame()
+                volume_profile_data_long_selected_dt = volume_profile_data_long_selected[volume_profile_data_long_selected.index<=volume_profile_asof].iloc[-1, :]
+                volume_profile_data_short_selected_dt = volume_profile_data_short_selected[volume_profile_data_short_selected.index<=volume_profile_asof].iloc[-1, :]
+                volume_profile_data_selected_dt['Long Volume'] = volume_profile_data_long_selected_dt
+                volume_profile_data_selected_dt['Short Volume'] = volume_profile_data_short_selected_dt
+                volume_profile_data_selected_dt['Net'] = volume_profile_data_selected_dt['Long Volume'] - volume_profile_data_selected_dt['Short Volume']
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    st.markdown(f'Volume Profile - Delta Traded')
+                    st.dataframe(volume_profile_data_selected_dt.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
+                with col2:
+                    volume_profile_data_selected_dt.index.name = 'Tenor'
+                    volume_profile_data_selected_dt = volume_profile_data_selected_dt.reset_index()
+                    fig_v = make_subplots(specs=[[{"secondary_y":True}]])
+                    fig_v.add_trace(go.Scatter(x=volume_profile_data_selected_dt['Tenor'], y=volume_profile_data_selected_dt['Long Volume'], name='Long Volume', mode='lines+markers',hovertemplate='<br>Tenor: %{x}<br>'+ ': %{y:.3f}'), secondary_y=True)
+                    fig_v.add_trace(go.Scatter(x=volume_profile_data_selected_dt['Tenor'], y=volume_profile_data_selected_dt['Short Volume'], name='Short Volume', mode='lines+markers',hovertemplate='<br>Tenor: %{x}<br>'+ ': %{y:.3f}'), secondary_y=True)
+                    fig_v.add_trace(go.Bar(x=volume_profile_data_selected_dt['Tenor'], y=volume_profile_data_selected_dt['Net'], name='Net', hovertemplate='<br>Tenor: %{x}<br> Net : %{y:.3f}'), secondary_y=False)            
+                    
+                    st.markdown('Volume Profile - Delta Traded as of {}'.format(volume_profile_asof))
+                    st.plotly_chart(fig_v, use_container_width=True)
+                
+                st.divider()
+                st.markdown('Volume Profile - Long Volume')
+                st.dataframe(volume_profile_data_long_selected.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
+                st.markdown('Volume Profile - Short Volume')
+                st.dataframe(volume_profile_data_short_selected.style.applymap(style_negative, props='color:red;').format(precision=0, thousands=","), height=525, use_container_width=True)
+                
+                #st.dataframe(volume_profile_data_long_selected.style.background_gradient(cmap='RdBu', axis=1)) #.style.apply(mean_highlighter).format(precision=4, decimal="."))
+            
